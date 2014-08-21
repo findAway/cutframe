@@ -92,6 +92,8 @@ int main(int argc, char** argv)
             nFlag = 0;
             break;
         }
+
+	    break;
     }
 
     if (nFlag == 0)
@@ -103,13 +105,79 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    s32 nStartPos = 0;
-    s32 nReadLine = 0;
-
-    while (nReadLine < nStartLine)
+    //search start position
+    nFlag = 1;
+    int nStartPos = 0;
+    int nReadLine = 0;
+    
+    while (nReadLine < nStartLine - 1)
     {
-        ;
+	    int nReadSize = 0;
+        int nRead = fscanf(pfSrcLenFile, "%d", &nReadSize);
+	    if (nReadSize <= 0 || nRead <= 0)
+	    {
+            PRT_ERROR("get frame size error\n");
+            nFlag = 0;
+            break;
+	    }
+
+        printf("frame size:%d\n", nReadSize);
+        nReadLine += 1;
+        nStartPos += nReadSize;
     }
+
+    if (nFlag == 0)
+    {
+        SAFE_CLOSE_FILE(pfSrcFrmFile);
+        SAFE_CLOSE_FILE(pfSrcLenFile);
+        SAFE_CLOSE_FILE(pfDestFrmFile);
+        SAFE_CLOSE_FILE(pfDestLenFile);
+        return 1;
+    }
+
+    //start to cut frames
+    nFlag = 1;
+    fseek(pfSrcFrmFile, nStartPos, SEEK_SET);
+    char* pBuf = malloc(1<<20);
+    while (1)
+    {
+        if (nReadLine >= nEndLine)
+        {
+            break;
+        }
+
+        int nReadSize = 0;
+        int nRead = fscanf(pfSrcLenFile, "%d", &nReadSize);
+        if (nReadSize <= 0 || nRead <= 0)
+        {
+            PRT_ERROR("get frame size error\n");
+            nFlag = 0;
+            break;
+        }
+
+        printf("frame size:%d\n", nReadSize);
+        nReadLine += 1;
+
+        int nDataRead = fread(pBuf, 1, nReadSize, pfSrcFrmFile);
+        if (nDataRead > 0)
+        {
+            fwrite(pBuf, 1, nDataRead, pfDestFrmFile);
+            fprintf(pfDestLenFile, "%d\n", nDataRead);
+        }
+
+        if (nDataRead < nReadSize)
+        {
+            PRT_ERROR("file read over unexpectly, expect read:%d, actual read:%d\n", nReadSize, nDataRead);
+            nFlag = 0;
+            break;
+        }
+    }
+
+    SAFE_CLOSE_FILE(pfSrcFrmFile);
+    SAFE_CLOSE_FILE(pfSrcLenFile);
+    SAFE_CLOSE_FILE(pfDestFrmFile);
+    SAFE_CLOSE_FILE(pfDestLenFile);
+    free(pBuf);
 
     return 0;
 }
