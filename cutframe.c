@@ -96,80 +96,69 @@ int main(int argc, char** argv)
 	    break;
     }
 
-    if (nFlag == 0)
-    {
-        SAFE_CLOSE_FILE(pfSrcFrmFile);
-        SAFE_CLOSE_FILE(pfSrcLenFile);
-        SAFE_CLOSE_FILE(pfDestFrmFile);
-        SAFE_CLOSE_FILE(pfDestLenFile);
-        return 1;
-    }
-
-    //search start position
-    nFlag = 1;
     int nStartPos = 0;
     int nReadLine = 0;
-    
-    while (nReadLine < nStartLine - 1)
+    if (nFlag != 0)
     {
-	    int nReadSize = 0;
-        int nRead = fscanf(pfSrcLenFile, "%d", &nReadSize);
-	    if (nReadSize <= 0 || nRead <= 0)
-	    {
-            PRT_ERROR("get frame size error\n");
-            nFlag = 0;
-            break;
-	    }
+        //search start position
+        while (nReadLine < nStartLine - 1)
+        {
+	        int nReadSize = 0;
+            int nRead = fscanf(pfSrcLenFile, "%d", &nReadSize);
+	        if (nReadSize <= 0 || nRead <= 0)
+	        {
+                PRT_ERROR("can't get the length of frame %d\n", nReadLine + 1);
+                nFlag = 0;
+                break;
+	        }
 
-        printf("frame size:%d\n", nReadSize);
-        nReadLine += 1;
-        nStartPos += nReadSize;
+            //printf("frame size:%d\n", nReadSize);
+            nReadLine += 1;
+            nStartPos += nReadSize;
+        }
     }
 
-    if (nFlag == 0)
-    {
-        SAFE_CLOSE_FILE(pfSrcFrmFile);
-        SAFE_CLOSE_FILE(pfSrcLenFile);
-        SAFE_CLOSE_FILE(pfDestFrmFile);
-        SAFE_CLOSE_FILE(pfDestLenFile);
-        return 1;
-    }
-
-    //start to cut frames
-    nFlag = 1;
-    fseek(pfSrcFrmFile, nStartPos, SEEK_SET);
     char* pBuf = malloc(1<<20);
-    while (1)
+    if (nFlag != 0 && pBuf != NULL)
     {
-        if (nReadLine >= nEndLine)
+        //start to cut frames
+        fseek(pfSrcFrmFile, nStartPos, SEEK_SET);
+        while (1)
         {
-            break;
-        }
+            int nReadSize = 0;
+            int nRead = fscanf(pfSrcLenFile, "%d", &nReadSize);
+            if (nReadSize <= 0 || nRead <= 0)
+            {
+                PRT_ERROR("can't get the length of frame %d\n", nReadLine + 1);
+                nFlag = 0;
+                break;
+            }
 
-        int nReadSize = 0;
-        int nRead = fscanf(pfSrcLenFile, "%d", &nReadSize);
-        if (nReadSize <= 0 || nRead <= 0)
-        {
-            PRT_ERROR("get frame size error\n");
-            nFlag = 0;
-            break;
-        }
+            //printf("frame size:%d\n", nReadSize);
+            nReadLine += 1;
 
-        printf("frame size:%d\n", nReadSize);
-        nReadLine += 1;
+            int nDataRead = fread(pBuf, 1, nReadSize, pfSrcFrmFile);
+            if (nDataRead < nReadSize)
+            {
+                PRT_ERROR("error read frame %d, expect read:%d, actual read:%d\n", nReadLine, nReadSize, nDataRead);
+                nFlag = 0;
+                break;
+            }
 
-        int nDataRead = fread(pBuf, 1, nReadSize, pfSrcFrmFile);
-        if (nDataRead > 0)
-        {
             fwrite(pBuf, 1, nDataRead, pfDestFrmFile);
             fprintf(pfDestLenFile, "%d\n", nDataRead);
-        }
 
-        if (nDataRead < nReadSize)
-        {
-            PRT_ERROR("file read over unexpectly, expect read:%d, actual read:%d\n", nReadSize, nDataRead);
-            nFlag = 0;
-            break;
+            if (nReadLine == nStartLine)
+            {
+                printf("[start] cut frame start...\n");
+                printf("first frame:%d, size:%d\n", nReadLine, nReadSize);
+            }
+            else if (nReadLine == nEndLine)
+            {
+                printf("[over] cut frame over\n");
+                printf("last frame:%d, size:%d\n", nReadLine, nReadSize);
+                break;
+            }
         }
     }
 
@@ -177,7 +166,15 @@ int main(int argc, char** argv)
     SAFE_CLOSE_FILE(pfSrcLenFile);
     SAFE_CLOSE_FILE(pfDestFrmFile);
     SAFE_CLOSE_FILE(pfDestLenFile);
-    free(pBuf);
+    if (pBuf != NULL)
+    {
+        free(pBuf);
+    }
+
+    if (nFlag == 0)
+    {
+        return 1;
+    }
 
     return 0;
 }
